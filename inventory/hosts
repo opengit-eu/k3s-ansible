@@ -1,0 +1,11 @@
+---
+opengit:
+  hosts:
+    dev1:
+      ansible_host: 95.211.41.116
+    dev2:
+      ansible_host: 95.211.41.117
+    dev3:
+      ansible_host: 95.211.41.118
+  vars:
+    ansible_port: 2849

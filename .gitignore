@@ -2,5 +2,6 @@ venv
 .venv
 .vscode
 .vagrant
+ansible.cfg
 inventory.yml
 playbook/debug.yml
