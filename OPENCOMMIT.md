@@ -22,9 +22,9 @@ Here's the complete improved version of [`OPENCOMMIT.md`](OPENCOMMIT.md:1) ready
 
 ```bash
 # Create your own file called ipaddresses.sh (or anything) and put the vars of PROD*_IP for 3 devices in there.
-export PROD1_IP="<kates1>"
-export PROD2_IP="<kates2>"
-export PROD3_IP="<kates3>"
+export KATES1_IP="<kates1>"
+export KATES2_IP="<kates2>"
+export KATES3_IP="<kates3>"
 
 export OPENCOMMIT_TOKEN=THIS_IS_KNOWN_BY_BENOIT_MARTIJN_SEBAS
 export ANSIBLE_CONFIG=$PWD/ansible.opencommit.cfg
@@ -47,9 +47,9 @@ ansible-playbook k3s.orchestration.site -i inventory/k3s-ansible.yml
 
 The following environment variables must be set and correspond to the hosts in `inventory/hosts`:
 
-- `PROD1_IP` → dev1 (ansible_host)
-- `PROD2_IP` → dev2 (ansible_host)
-- `PROD3_IP` → dev3 (ansible_host)
+- `KATES1_IP` → dev1 (ansible_host)
+- `KATES2_IP` → dev2 (ansible_host)
+- `KATES3_IP` → dev3 (ansible_host)
 
 ## Example ipaddresses.sh
 
@@ -59,15 +59,15 @@ Create this file and customize with your actual IPs:
 #!/bin/bash
 # ipaddresses.sh - DO NOT COMMIT THIS FILE
 
-export PROD1_IP="192.168.1.10"
-export PROD2_IP="192.168.1.11"
-export PROD3_IP="192.168.1.12"
+export KATES1_IP="192.168.1.10"
+export KATES2_IP="192.168.1.11"
+export KATES3_IP="192.168.1.12"
 
 # Verify variables are set
 echo "IPs configured:"
-echo "  PROD1: $PROD1_IP"
-echo "  PROD2: $PROD2_IP"
-echo "  PROD3: $PROD3_IP"
+echo "  KATES1: $KATES1_IP"
+echo "  KATES2: $KATES2_IP"
+echo "  KATES3: $KATES3_IP"
 ```
 
 Then add to `.gitignore`:

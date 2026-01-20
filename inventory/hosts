@@ -2,10 +2,10 @@
 opencommit:
   hosts:
     dev1:
-      ansible_host: "{{ lookup('env', 'PROD1_IP') }}"
+      ansible_host: "{{ lookup('env', 'KATES1_IP') }}"
     dev2:
-      ansible_host: "{{ lookup('env', 'PROD2_IP') }}"
+      ansible_host: "{{ lookup('env', 'KATES2_IP') }}"
     dev3:
-      ansible_host: "{{ lookup('env', 'PROD3_IP') }}"
+      ansible_host: "{{ lookup('env', 'KATES3_IP') }}"
   vars:
     ansible_port: 2849
