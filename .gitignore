@@ -5,3 +5,4 @@ venv
 ansible.cfg
 inventory.yml
 playbook/debug.yml
+ipaddresses.sh 
