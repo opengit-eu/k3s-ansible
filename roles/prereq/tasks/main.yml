@@ -2,14 +2,20 @@
 - name: Enforce minimum Ansible version
   ansible.builtin.assert:
     that:
-      - ansible_version.full is version('2.14', '>=')
-    msg: "Minimum ansible-core version required is 2.14"
+      - ansible_version.full is version('2.15', '>=')
+    msg: "Minimum ansible-core version required is 2.15"
 
 - name: Install Dependent Ubuntu Packages
-  when: ansible_distribution in ['Ubuntu']
+  when: ansible_facts['distribution'] in ['Ubuntu']
   ansible.builtin.apt:
     name: policycoreutils  # Used by install script to restore SELinux context
-    update_cache: true
+    update_cache: "{{ airgap_dir is not defined }}"
+
+- name: Install Dependent RHEL 10 Package
+  when: ansible_facts['os_family'] == 'RedHat' and ansible_facts['distribution_major_version'] == "10"
+  ansible.builtin.dnf:
+    name: kernel-modules-extra   # Load br_netfilter module
+    update_cache: "{{ airgap_dir is not defined }}"
 
 - name: Enable IPv4 forwarding
   ansible.posix.sysctl:
@@ -24,7 +30,38 @@
     value: "1"
     state: present
     reload: true
-  when: ansible_all_ipv6_addresses | length > 0
+  when: ansible_facts['all_ipv6_addresses'] | length > 0
+
+- name: Handle modern nftables/iptables-nft stack (Arch Linux ARM 6.18+)
+  when:
+    - ansible_facts['distribution'] == 'Archlinux'
+    - ansible_facts['kernel'] is version('6.18', '>=')
+  block:
+    - name: Check if legacy iptables is installed
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: Ensure legacy iptables is removed to avoid conflicts
+      community.general.pacman:
+        name: iptables
+        state: absent
+        force: true
+      when:
+        - "'iptables' in ansible_facts.packages"
+        - "'iptables-nft' not in ansible_facts.packages"
+
+    - name: Install iptables-nft and nftables
+      community.general.pacman:
+        name:
+          - iptables-nft
+          - nftables
+        state: present
+
+    - name: Ensure nftables is enabled and started
+      ansible.builtin.systemd:
+        name: nftables
+        state: started
+        enabled: true
 
 - name: Populate service facts
   ansible.builtin.service_facts:
@@ -38,11 +75,11 @@
       ansible.builtin.command:
         cmd: ufw status
       changed_when: false
-      register: ufw_status
+      register: prereq_ufw_status
 
     - name: If ufw enabled, open api port
       when:
-        - "'Status: active' in ufw_status['stdout']"
+        - "'Status: active' in prereq_ufw_status['stdout']"
       community.general.ufw:
         rule: allow
         port: "{{ api_port }}"
@@ -50,16 +87,30 @@
 
     - name: If ufw enabled, open etcd ports
       when:
-        - "'Status: active' in ufw_status['stdout']"
+        - "'Status: active' in prereq_ufw_status['stdout']"
         - groups[server_group] | length > 1
       community.general.ufw:
         rule: allow
         port: "2379:2381"
         proto: tcp
 
+    - name: If ufw enabled, open inter-node ports
+      when:
+        - "'Status: active' in prereq_ufw_status['stdout']"
+      community.general.ufw:
+        rule: allow
+        port: "{{ item.port }}"
+        proto: "{{ item.proto }}"
+      loop:
+        - { port: "5001", proto: "tcp" }    # Spegel (Embedded distributed registry)
+        - { port: "8472", proto: "udp" }    # Flannel VXLAN
+        - { port: "10250", proto: "tcp" }   # Kubelet metrics
+        - { port: "51820", proto: "udp" }   # Flannel Wireguard (IPv4)
+        - { port: "51821", proto: "udp" }   # Flannel Wireguard (IPv6)
+
     - name: If ufw enabled, allow default CIDRs
       when:
-        - "'Status: active' in ufw_status['stdout']"
+        - "'Status: active' in prereq_ufw_status['stdout']"
       community.general.ufw:
         rule: allow
         src: '{{ item }}'
@@ -94,7 +145,7 @@
         state: enabled
         permanent: true
         immediate: true
-      with_items:
+      loop:
         - 5001/tcp   # Spegel (Embedded distributed registry)
         - 8472/udp   # Flannel VXLAN
         - 10250/tcp  # Kubelet metrics
@@ -114,7 +165,9 @@
             groups[server_group] | default([])
             + groups[agent_group] | default([])
           )
-          | map('extract', hostvars, ['ansible_default_ipv4', 'address'])
+          | map('extract', hostvars)
+          | selectattr('ansible_facts.default_ipv4', 'defined')
+          | map(attribute='ansible_facts.default_ipv4.address')
           | flatten | unique | list
         }}
 
@@ -132,13 +185,13 @@
     content: "br_netfilter"
     dest: /etc/modules-load.d/br_netfilter.conf
     mode: "u=rw,g=,o="
-  when: (ansible_os_family == 'RedHat' or ansible_distribution == 'Archlinux')
+  when: (ansible_facts['os_family'] == 'RedHat' or ansible_facts['distribution'] == 'Archlinux')
 
 - name: Load br_netfilter
   community.general.modprobe:
     name: br_netfilter
     state: present
-  when: (ansible_os_family == 'RedHat' or ansible_distribution == 'Archlinux')
+  when: (ansible_facts['os_family'] == 'RedHat' or ansible_facts['distribution'] == 'Archlinux')
 
 - name: Set bridge-nf-call-iptables (just to be sure)
   ansible.posix.sysctl:
@@ -146,7 +199,7 @@
     value: "1"
     state: present
     reload: true
-  when: (ansible_os_family == 'RedHat' or ansible_distribution == 'Archlinux')
+  when: (ansible_facts['os_family'] == 'RedHat' or ansible_facts['distribution'] == 'Archlinux')
   loop:
     - net.bridge.bridge-nf-call-iptables
     - net.bridge.bridge-nf-call-ip6tables
@@ -154,29 +207,29 @@
 - name: Check for Apparmor existence
   ansible.builtin.stat:
     path: /sys/module/apparmor/parameters/enabled
-  register: apparmor_enabled
+  register: prereq_apparmor_enabled
 
 - name: Check if Apparmor is enabled
-  when: apparmor_enabled.stat.exists
+  when: prereq_apparmor_enabled.stat.exists
   ansible.builtin.command: cat /sys/module/apparmor/parameters/enabled
-  register: apparmor_status
+  register: prereq_apparmor_status
   changed_when: false
 
 - name: Install Apparmor Parser [Suse]
   when:
-    - ansible_os_family == 'Suse'
-    - apparmor_status is defined
-    - apparmor_status.stdout == "Y"
+    - ansible_facts['os_family'] == 'Suse'
+    - prereq_apparmor_status is defined
+    - prereq_apparmor_status.stdout == "Y"
   ansible.builtin.package:
     name: apparmor-parser
     state: present
 
 - name: Install Apparmor Parser [Debian]
   when:
-    - ansible_distribution == 'Debian'
+    - ansible_facts['distribution'] == 'Debian'
     - ansible_facts['distribution_major_version'] == "11"
-    - apparmor_status is defined
-    - apparmor_status.stdout == "Y"
+    - prereq_apparmor_status is defined
+    - prereq_apparmor_status.stdout == "Y"
   ansible.builtin.package:
     name: apparmor
     state: present
@@ -200,12 +253,12 @@
 - name: Add /usr/local/bin to sudo secure_path
   ansible.builtin.lineinfile:
     line: 'Defaults    secure_path = /sbin:/bin:/usr/sbin:/usr/bin:/usr/local/bin'
-    regexp: "Defaults(\\s)*secure_path(\\s)*="
+    regexp: 'Defaults(\s)*secure_path(\s)*='
     state: present
     insertafter: EOF
     path: /etc/sudoers
     validate: 'visudo -cf %s'
-  when: ansible_os_family == 'RedHat'
+  when: ansible_facts['os_family'] == 'RedHat'
 
 - name: Setup alternative K3s directory
   when:

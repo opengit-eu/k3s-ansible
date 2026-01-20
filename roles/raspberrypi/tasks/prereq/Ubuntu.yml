@@ -1,11 +1,15 @@
 ---
-- name: Enable cgroup via boot commandline if not already enabled
-  when: lookup('fileglob', '/boot/firmware/cmdline.txt', errors='warn') | length > 0
-  ansible.builtin.replace:
+- name: Check if /boot/firmware/cmdline.txt exists
+  ansible.builtin.stat:
     path: /boot/firmware/cmdline.txt
+  register: raspberrypi_boot_file
+
+- name: Enable cgroup via boot commandline if not already enabled
+  ansible.builtin.replace:
+    path: "{{ (raspberrypi_boot_file.stat.exists) | ternary('/boot/firmware/cmdline.txt', '/boot/firmware/current/cmdline.txt') }}"
     regexp: '^([\w](?!.*\b{{ cgroup_item }}\b).*)$'
     replace: '\1 {{ cgroup_item }}'
-  with_items:
+  loop:
     - "cgroup_enable=cpuset"
     - "cgroup_memory=1"
     - "cgroup_enable=memory"
@@ -18,6 +22,6 @@
     # Fixes issues in newer Ubuntu where VXLan isn't setup right.
     # See: https://github.com/k3s-io/k3s/issues/4234
     name: linux-modules-extra-raspi
-    update_cache: true
+    update_cache: "{{ airgap_dir is not defined }}"
     state: present
-  when: "ansible_distribution_version is version('20.10', '>=') and ansible_distribution_version is version('24.04', '<')"
+  when: "ansible_facts['distribution_version'] is version('20.10', '>=') and ansible_facts['distribution_version'] is version('24.04', '<')"

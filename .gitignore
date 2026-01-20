@@ -5,4 +5,6 @@ venv
 ansible.cfg
 inventory.yml
 playbook/debug.yml
+.ansible/
+PR_DESCRIPTION.md
 ipaddresses.sh 

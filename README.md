@@ -32,11 +32,22 @@ It is also recommended that all managed nodes disable firewalls and swap. See [K
 
 ### With ansible-galaxy
 
-`k3s-ansible` is a Ansible collection and can be installed with the `ansible-galaxy` command:
+`k3s-ansible` is an Ansible collection and can be installed with the `ansible-galaxy` command:
 
 ```console
 $ ansible-galaxy collection install git+https://github.com/k3s-io/k3s-ansible.git
 ```
+
+Alternatively, add it to the [`requirements.yaml` file of your Ansible project](https://docs.ansible.com/ansible/latest/collections_guide/collections_installing.html#install-multiple-collections-with-a-requirements-file) as follows:
+
+```yaml
+collections:
+  - name: https://github.com/k3s-io/k3s-ansible.git
+    type: git
+    version: <comit-ish>
+```
+
+As a comit-ish, you can use a branch, a version tag, or a specific commit.
 
 ### From source
 
@@ -92,6 +103,23 @@ ansible-playbook k3s.orchestration.site -i inventory.yml
 ansible-playbook playbooks/site.yml -i inventory.yml
 ```
 
+Alternatively, to run the playbook from your existing project setup, run the playbook from within your own playbook:
+
+*Installed with ansible-galaxy*
+
+```yaml
+- name: Import kube cluster playbook
+  ansible.builtin.import_playbook: k3s-ansible/playbooks/site.yml
+```
+
+*Running the playbook from inside the repository*
+
+```yaml
+- name: Import kube cluster playbook
+  ansible.builtin.import_playbook: k3s.orchestration.site
+```
+
+
 ### Using an external database
 
 If an external database is preferred, this can be achieved by passing the `--datastore-endpoint` as an extra server argument as well as setting the `use_external_database` flag to true.
@@ -135,7 +163,7 @@ ansible-playbook playbooks/upgrade.yml -i inventory.yml
 
 ## Airgap Install
 
-Airgap installation is supported via the `airgap_dir` variable. This variable should be set to the path of a directory containing the K3s binary and images. The release artifacts can be downloaded from the [K3s Releases](https://github.com/k3s-io/k3s/releases). You must download the appropriate images for you architecture (any of the compression formats will work).
+Airgap installation is supported via the `airgap_dir` variable. This variable should be set to the path of a directory containing the K3s binary and images. The release artifacts can be downloaded from the [K3s Releases](https://github.com/k3s-io/k3s/releases). You must download the appropriate images for you architecture (any of the compression formats will work). Additionally, you must run the `airgap` role to set up the airgapped environment.
 
 An example folder for an x86_64 cluster:
 ```bash
@@ -149,14 +177,14 @@ $ cat inventory.yml
 airgap_dir: ./my-airgap # Paths are relative to the playbooks directory
 ```
 
-Additionally, if deploying on a OS with SELinux, you will also need to download the latest [k3s-selinux RPM](https://github.com/k3s-io/k3s-selinux/releases/latest) and place it in the airgap folder.
+Additionally, if deploying on an OS with SELinux, you will also need to download the latest [k3s-selinux RPM](https://github.com/k3s-io/k3s-selinux/releases/latest) and place it in the airgap folder.
 
 
 It is assumed that the control node has access to the internet. The playbook will automatically download the k3s install script on the control node, and then distribute all three artifacts to the managed nodes. 
 
 ## Kubeconfig
 
-After successful bringup, the kubeconfig of the cluster is copied to the control node  and merged with `~/.kube/config` under the `k3s-ansible` context.
+After successful bringup, the kubeconfig of the cluster is copied to the control node  and merged with `~/.kube/config` under the `k3s-ansible` context unless overwritten by the `cluster_context` variable.
 Assuming you have [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl) installed, you can confirm access to your **Kubernetes** cluster with the following:
 
 ```bash
@@ -166,6 +194,19 @@ kubectl get nodes
 
 If you wish for your kubeconfig to be copied elsewhere and not merged, you can set the `kubeconfig` variable in `inventory.yml` to the desired path.
 
+If you wish to get a new copy of the kubeconfig after installation you can run the site playbook again using the `kubeconfig` tag.
+
+*Installed with ansible-galaxy*
+
+```bash
+ansible-playbook k3s.orchestration.site -i inventory.yml --tags kubeconfig
+```
+
+*Running the playbook from inside the repository*
+
+```bash
+ansible-playbook playbooks/site.yml -i inventory.yml --tags kubeconfig
+```
 ## Local Testing
 
 A Vagrantfile is provided that provision a 5 nodes cluster using Vagrant (LibVirt or Virtualbox as provider). To use it:
@@ -174,7 +215,7 @@ A Vagrantfile is provided that provision a 5 nodes cluster using Vagrant (LibVir
 vagrant up
 ```
 
-By default, each node is given 2 cores and 2GB of RAM and runs Ubuntu 20.04. You can customize these settings by editing the `Vagrantfile`.
+By default, each node is given 2 cores and 2GB of RAM and runs Ubuntu 24.04. You can customize these settings by editing the `Vagrantfile`.
 
 ## Need More Features?
 
