@@ -29,7 +29,7 @@ export PROD3_IP="<kates3>"
 export OPENCOMMIT_TOKEN=THIS_IS_KNOWN_BY_BENOIT_MARTIJN_SEBAS
 export ANSIBLE_CONFIG=$PWD/ansible.opencommit.cfg
 ansible-galaxy collection install git+https://github.com/k3s-io/k3s-ansible.git
-ansible-playbook k3s.orchestration.site -i inventory
+ansible-playbook k3s.orchestration.site -i inventory/k3s-ansible.yml
 ```
 
 ## How to Use This Repo
