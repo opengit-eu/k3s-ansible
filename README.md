@@ -24,9 +24,25 @@ The control node **must** have Ansible 8.0+ (ansible-core 2.15+)
 
 All managed nodes in inventory must have:
 - Passwordless SSH access
-- Root access (or a user with equivalent permissions) 
+- Root access (or a user with equivalent permissions)
 
 It is also recommended that all managed nodes disable firewalls and swap. See [K3s Requirements](https://docs.k3s.io/installation/requirements) for more information.
+
+### Kernel inotify tuning (required for new installations)
+
+Kubernetes workloads can exhaust the default Linux inotify limits, causing errors such as `too many open files` or `failed to create inotify`. On each node, create a persistent drop-in config file before provisioning the cluster:
+
+```bash
+cat <<EOF | sudo tee /etc/sysctl.d/99-kubernetes-inotify.conf
+fs.inotify.max_user_instances = 1024
+fs.inotify.max_user_watches = 524288
+fs.file-max = 2097152
+EOF
+
+sudo sysctl --system
+```
+
+The persistent approach via `/etc/sysctl.d/` is strongly preferred over a one-time command so the settings survive reboots.
 
 ## Installation
 
